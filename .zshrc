@@ -1,7 +1,6 @@
 alias gst="git status"
 alias gm="git commit -m"
 alias gck="git checkout"
-alias cdc="cd /Users/alexander.samusev/Documents/Parity/current"
 alias gcm="git checkout master || git checkout main"
 alias git_cleanup='git branch | grep -v "master\|stable\|main" | xargs git branch -d -f'
 alias gb="git --no-pager branch"
