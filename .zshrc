@@ -83,6 +83,14 @@ function dex {
   docker run -exec -it $1 bash
 }
 
+function b64 {
+  echo -n $1 | base64
+}
+
+function b64d {
+  echo $1 | base64 -d
+}
+
 if [ "$(docker-machine status)" != 'Stopped' ]; then eval $(docker-machine env default); else echo "docker machine stopped"; fi
 
 # tput howto: https://linuxcommand.org/lc3_adv_tput.php
@@ -90,6 +98,12 @@ BOLD_ORG_FG=$(tput bold)$(tput setaf 208)
 BOLD_ORG_FG_YW=$(tput bold)$(tput setaf 11)
 BOLD=$(tput bold)
 RESET=$(tput sgr0)
+
+alias cpb="docker pull paritytech/ci-linux:production && cargoenvclean paritytech/ci-linux:production bash"
+alias kcu="k config use-context"
+alias kcg="k config get-contexts"
+alias ka="k apply"
+alias gal="gcloud auth login"
 
 h() {
     printf "\n"
@@ -111,7 +125,18 @@ h() {
     printf "%s\n" "${BOLD_ORG_FG}cpb${RESET} - docker pull paritytech/ci-linux:production and run with cargoenvclean"
     printf "%s\n" "${BOLD_ORG_FG}tas${RESET} - tmux attach-session"
     printf "%s\n" "${BOLD_ORG_FG}dex${RESET} - docker run exec bash, usage dex debian:latest bash"
-
+    printf "%s\n" "${BOLD_ORG_FG}b64${RESET} - base64 string"
+    printf "%s\n" "${BOLD_ORG_FG}b64d${RESET} - base64 -d string"
+    printf "\n"
+    printf "%s\n" "${BOLD_ORG_FG_YW}K8S${RESET}"
+    printf "\n"
+    printf "%s\n" "${BOLD_ORG_FG}kcu${RESET} - kubectl config use-context"
+    printf "%s\n" "${BOLD_ORG_FG}kcg${RESET} - kubectl config get-contexts"
+    printf "%s\n" "${BOLD_ORG_FG}ka${RESET} - kubectl apply"
+    printf "\n"
+    printf "%s\n" "${BOLD_ORG_FG_YW}GCP${RESET}"
+    printf "\n"
+    printf "%s\n" "${BOLD_ORG_FG}gal${RESET} - gcloud auth login"
 }
 
 # some useful things can be found here: https://github.com/Bhupesh-V/ugit/blob/master/ugit
