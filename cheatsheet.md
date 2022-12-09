@@ -41,7 +41,7 @@
 
 `kubectl auth can-i list pods --as developer -n dev` - посмотреть резрешение на определенное действие
 
-`kubectl run -i --tty ubuntu --image=ubuntu:16.04 --restart=Never -- bash -il` - запустить убунту и провалиться в консоль (если добавить --rm, то под удалится, после выхода из него)  
+`kubectl run -i --tty ubuntu --image=ubuntu:20.04 --restart=Never -- bash -il` - запустить убунту и провалиться в консоль (если добавить --rm, то под удалится, после выхода из него)  
 `kubectl exec -it myapp-nginx-64f67c4c7c-lkqxh -- /bin/bash` - провалиться в контейнер  
 `kubectl completion -h` - автодополнение kubectl  
 `source <(kubectl completion bash)` - в текущую сессию  
@@ -248,6 +248,10 @@ roleRef:
 `gcloud projects get-iam-policy <project_id>` - посмотреть все политики в проекте  
 `gcloud organizations get-iam-policy <org_id>` - посмотреть все политики в орге  
 `gcloud resource-manager folders get-iam-policy <folder-id>` - по папкам  
+`gcloud config get-value project` - текущий проект  
+`gcloud config set project PROJECT_ID` - поменять проект  
+`gcloud projects list` - список проектов  
+`gcloud iam service-accounts keys create google-<project>.json --iam-account username@project-id.iam.gserviceaccount.com` - получить json для GOOGLE_APPLICATION_CREDENTIALS
 
 ## Service accounts
 
