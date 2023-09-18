@@ -1,10 +1,24 @@
 # Table of contents
 
+- [Table of contents](#table-of-contents)
 - [shell](#shell)
 - [k8s](#k8s)
+  * [Install](#install)
+  * [Create ns dev](#create-ns-dev)
+  * [Create user (authentication)](#create-user--authentication-)
+    + [With certificate](#with-certificate)
+    + [With kubeadm](#with-kubeadm)
+  * [Create role and role binding (authorization)](#create-role-and-role-binding--authorization-)
+  * [Audit](#audit)
 - [Docker](#docker)
 - [gcloud](#gcloud)
-- [Разное](#разное)
+  * [IAM](#iam)
+  * [Service accounts](#service-accounts)
+  * [Storage](#storage)
+  * [VPC](#vpc)
+  * [Misc](#misc)
+  * [K8S](#k8s)
+- [Misc](#misc-1)
 
 # shell
 
@@ -71,7 +85,8 @@ openssl req -new -key developer2.key -out developer2.csr -subj "/CN=developer2"
 openssl x509 -req -in developer2.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -CAcreateserial -out developer2.crt -days 500  
 ```
 
-## Установка
+## Install
+
 `sudo kubeadm init --control-plane-endpoint "lab-k8s-lb.ptsecurity.ru:6443" --upload-certs --pod-network-cidr=192.168.0.0/16`
 
 даем своему пользователю возможность управлять кластером:
@@ -96,7 +111,7 @@ kubeadm join lab-k8s-lb.ptsecurity.ru:6443 --token i21ktt.l0mhr17xjbnoa3vo \
     --discovery-token-ca-cert-hash sha256:75526655624cb63674ac942c103d644632a70054c196dbe84385ab4a4a344c44
 ```
 
-## Создаем namespace dev
+## Create ns dev
 
 dev-ns.yml
 ```yml
@@ -138,8 +153,11 @@ spec:
       type: Container
 ```
 
-## Создаем пользователя (authentication)
-### Через сертификат
+## Create user (authentication)
+
+Useful link: [Kubernetes SSO with OIDC and GitLab in k3s](https://www.hoelzel.it/kubernetes/2023/04/17/k3s-gitlab-oidc-copy.html)
+
+### With certificate
 ```bash
 openssl genrsa -out developer2.key 2048
 openssl req -new -key developer2.key -out developer2.csr -subj "/CN=developer2"
@@ -174,13 +192,13 @@ users:
     client-key-data: cat developer2.key | base64 -w 0
 ```
 
-### Через kubeadm
+### With kubeadm
 
 `kubeadm alpha kubeconfig user user --client-name=developer2`
 
 Выдаст в консоль готовый конфиг файл, но надо будет в нем прописать namespace
 
-## Создаем роль для пользователя и привязку роли к пользователю (authorization)
+## Create role and role binding (authorization)
 
 Role - на конкретный namespace, ClusterRole - на весь кластер
 
@@ -231,15 +249,49 @@ roleRef:
  - https://habr.com/ru/company/flant/blog/468679/
  - https://www.alibabacloud.com/help/doc-detail/91406.htm
 
+## Requests, limits and cgroup
+
+Depending on what cgroup version is on the host settings may vary:
+
+Inside of the container:
+
+```
+"/sys/fs/cgroup/memory/memory.limit_in_bytes",  # cgroups v1 hard limit (limits)
+"/sys/fs/cgroup/memory/memory.soft_limit_in_bytes",  # cgroups v1 soft limit (requests)
+"/sys/fs/cgroup/memory.max",  # cgroups v2 hard limit (limits)
+"/sys/fs/cgroup/memory.high",  # cgroups v2 soft limit (requests)
+```
+
+Inside of the system could be somewhere in `/sys/fs/cgroup/kubelet.slice`
+
+Nice article: https://martinheinz.dev/blog/91
+
+Quote from it:
+
+```
+Most people don't know this, but currently - as of Kubernetes v1.26 - memory requests in Pod manifest are not taken into consideration by container runtime and are therefore effectively ignored. Additionally, there's no way to throttle memory usage and when container reaches memory limit, it simply gets OOM killed. With introduction of Memory QoS feature, which is currently in Alpha, Kubernetes can take advantage of additional cgroup files memory.min and memory.high to throttle a container instead of straight-up killing it. (Note: The memory.min value in the earlier examples is populated only because Memory QoS was enabled on the cluster.)
+```
+
+`systemd-cgls --unit kubepods.slice --no-pager` - to check all cgroups related to k8s  
+`systemctl show --no-pager cri-containerd-...` - cgroups for specific container
+
+Also when I experimented with kind I saw that only limits where added to cgroup (debian 11 with cgroups v2)
+
+`kubectl get nodes -o yaml` - search for `allocatable` to check how much resourcses a node has
+
+kubelet creates cgroup with `allocatable` boundaries and then passes json spec to cri, cri to runc and runc creates cgroup for a specific container
+
+Setting resources and requests also affects qosClass settings  
+
 # Docker
 
 `docker ps` - список контейнеров  
-`docker inspect cont-id` - json с инфой про контейнеры  
-`docker exec -it cont-id bash` - провалиться внутрь контейнера  
+`docker inspect <container_id>` - json с инфой про контейнеры  
+`docker exec -it <container_id> bash` - провалиться внутрь контейнера  
 `docker container stop $(docker container ls -aq)` - убить все контейнеры  
 `docker container rm $(docker container ls -aq)` - удалить все контейнеры  
 `docker system prune` - почистить всё неиспользуемое  
-`docker run -it ubuntu:16.04 bash` - запустить контейнер с убунтой и провалиться в него  
+`docker run -it ubuntu:20.04 bash` - запустить контейнер с убунтой и провалиться в него  
 
 # gcloud
 
@@ -277,7 +329,7 @@ roleRef:
 `gcloud container clusters get-credentials alex-dev --zone europe-west1-b` - получить креды от кластера
 
 
-# Разное
+# Misc
 
 mkfifo nc-pipe  
 nc -l -p 4001 <nc-pipe | nc redhat2 5000 >nc-pipe  
