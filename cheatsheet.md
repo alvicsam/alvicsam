@@ -26,6 +26,14 @@
 
 # k8s
 
+autocomlete:
+
+```bash
+source <(kubectl completion bash)
+alias k=kubectl
+complete -F __start_kubectl k
+```
+
 `kubectl cluster-info` - инфа о кластере  
 `kubectl get componentstatuses` - состояние компонентов
 
