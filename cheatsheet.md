@@ -283,6 +283,173 @@ kubelet creates cgroup with `allocatable` boundaries and then passes json spec t
 
 Setting resources and requests also affects qosClass settings  
 
+## Small notes about networking
+
+Calico - использует BGP, каждый контейнер получает ip, появляется в таблице маршрутизации, остальные неиспользуемые адреса отправляются в blackhole
+
+Antrea - работает на L2, использует OVS, один gw, на нодах есть только пути вида `192.168.1.0/24 via 192.168.1.1 dev Antrea-gw0 onlink`
+
+В плане дебага удобно смотреть на подсеть, т.к. подести обычно привязаны к нодам
+
+- Antrea has one routing table entry per node.
+- Calico has one routing table entry per Pod.
+
+### Debug and tracing
+
+Sonobuoy или tests/e2e в репе кубера. Sonobuoy основан на этих же тестах
+
+```bash
+wget https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.51.0/sonobuoy_0.51.0_darwin_amd64.tar.gz
+tar -xvf sonobuoy
+chmod +x sonobuoy ; cp sonobuoy /usr/loca/bin/
+# takes 1-2h on a healthy cluster
+sonobuoy run e2e --focus=Conformance
+# test network specifically
+sonobuoy run e2e --e2e-focus=intra-pod
+# посмотреть статус
+sonobuoy status
+```
+
+Pod with ip 100.96.1.2 sends packet to pod with ip 100.96.1.2:
+ - A Pod from 100.96.1.2 sends traffic to a service IP that it receives via a DNS query (not shown in the figure).
+ - The service then routes the traffic from the Pod to an IP determined by iptables. The iptables rule routes the traffic to a Pod on a different node.
+ - The node receives the packet, and an iptables (or OVS) rule determines if it is in violation of a network policy.
+ - The packet is delivered to the 100.96.1.3 endpoint.
+
+Какие проблемы могут возникнуть по пути:
+ - network policy rules
+ - firewall between k8s nodes
+ - CNI is down or malfunctioning
+ - something wrong with TLS
+
+https://github.com/mattfenwick/cyclonus - для тестирования сетевых политик
+
+
+## Kind
+
+Create cluster to play with ingress:
+
+
+kind-ingress.yaml:
+
+```yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true # disable kindnet
+  podSubnet: 192.168.0.0/16 # set to Calico's default subnet
+nodes:
+- role: control-plane
+- role: worker
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    listenAddress: "0.0.0.0"
+  - containerPort: 443
+    hostPort: 443
+    listenAddress: "0.0.0.0"
+```
+
+pod.yaml:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+  labels:
+    service: example-pod
+spec:
+  containers:
+    - name: frontend
+      image: python
+      command:
+        - "python3"
+        - "-m"
+        - "http.server"
+        - "8080"
+      ports:
+        - containerPort: 8080
+```
+
+service.yaml
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    service: example-pod
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+```
+
+debug-pod.yaml
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sleep
+spec:
+  containers:
+    - name: check
+      image: jayunit100/ubuntu-utils
+      command:
+      - "sleep"
+      - "10000"
+```
+
+ingress.yaml:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example-ingress
+spec:
+  rules:
+  - host: my-service.local
+    http:
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: my-service
+            port:
+              number: 8080
+```
+
+```bash
+kind create cluster --name=kind-ingress --config=./kind-ingress.yaml
+# isntall calico
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.3/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.3/manifests/custom-resources.yaml
+
+# install ingress
+git clone https://github.com/projectcontour/contour.git
+kubectl apply -f contour/examples/contour
+
+# make it work locally for one service
+echo "127.0.0.1   my-service.local" >> /etc/hosts
+
+kubectl apply -f pod.yaml debug-pod.yaml service.yaml ingress.yaml
+
+# check that service is accessible from inside
+kubectl exec -t -i sleep -- curl my-service:8080/etc/passwd
+
+# check that ingress works
+curl my-service.local
+
+# remove cluster
+kind delete cluster --name=kind-ingress
+```
+
 # Docker
 
 `docker ps` - список контейнеров  
